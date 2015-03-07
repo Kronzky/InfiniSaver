@@ -21,16 +21,12 @@ $campaignInfo = False
 If FileExists($iniFile) Then
 	$customPath = IniRead($iniFile,"general","path","")
 	If $customPath<>"" Then
-		DebugPrint($customPath)
 		$savePath = $customPath
 		$saveRoot = StringLeft($savePath,StringInStr($savePath,"\",0,-1)-1)
 	EndIf
 
 	$campaign = IniReadSection($iniFile,"campaign")
 	If @error==0 Then $campaignInfo = True
-	;_ArrayDisplay($campaign)
-Else
-
 EndIf
 
 If FileExists($saveRoot) And $customPath=="" Then
@@ -44,7 +40,6 @@ If FileExists($saveRoot) And $customPath=="" Then
 			$newestDate = $date
 			$newestFolder = $folder
 		EndIf
-		;DebugPrint($saveRoot & $folder & ": " & $date)
 	Next
 	$savePath = $saveRoot & $newestFolder
 EndIf
@@ -157,8 +152,6 @@ Func GetLevels($path,$list)
 								$savedLevels[$idx-1][8+$slot] = $solution
 								ReDim $savedLevels[$idx+1][11]
 							EndIf
-						Else
-
 						EndIf
 					EndIf
 					$lastlevel = $levelId
@@ -171,11 +164,6 @@ Func GetLevels($path,$list)
 
 	For $i=1 To UBound($savedLevels,1)-2
 		If $savedLevels[$i][1]<>"" Then
-			$info = ""
-			For $j=0 to 10
-				$info &= $savedLevels[$i][$j] & ", "
-			Next
-
 			$level = $savedLevels[$i][0]
 			$title = $savedLevels[$i][1]
 			$save1 = "-"
@@ -236,8 +224,8 @@ GUICtrlCreateLabel ("Available Saves:",10,150,100)
 
 $SavList = GUICtrlCreateListView("",10, 170, 580, 350)
 _GUICtrlListView_AddColumn($SavList,"idx",0)
-_GUICtrlListView_AddColumn($SavList,"Level ID",90)
-_GUICtrlListView_AddColumn($SavList,"Title",290)
+_GUICtrlListView_AddColumn($SavList,"Level ID",80)
+_GUICtrlListView_AddColumn($SavList,"Title",300)
 _GUICtrlListView_AddColumn($SavList,"Save1",60)
 _GUICtrlListView_AddColumn($SavList,"Save2",60)
 _GUICtrlListView_AddColumn($SavList,"Save3",60)
@@ -285,7 +273,7 @@ While 1
 		EndIf
 
 		$prefix = $level
-		If $title=="Campaign" Then
+		If StringInStr($level,"-") Then
 			$prefix = "cmp" & $level
 		EndIf
 
@@ -294,7 +282,9 @@ While 1
 			$file = $saveFiles[$i]
 			$file = StringMid($file,StringLen($prefix)+2)
 			$file = StringReplace($file,".sav","")
-			GUICtrlSetData($fromList,$file)
+			If $file<>"" Then
+				GUICtrlSetData($fromList,$file)
+			EndIf
 		Next
 
 	EndIf
@@ -306,9 +296,10 @@ While 1
 
 		Case $folderBtn
 			$savePath = FileSelectFolder("Select save folder",$saveRoot,-1,$saveRoot)
-			IniWrite($iniFile,"general","path",$savePath)
-			GetLevels($savePath,$SavList)
-
+			If $savePath<>"" Then
+				IniWrite($iniFile,"general","path",$savePath)
+				GetLevels($savePath,$SavList)
+			EndIf
 
 		Case $backupBtn
 			$backup = @WorkingDir & "\save_" & StringReplace(_NowCalcDate(),"/","") & "-" & StringReplace(_NowTime(4),":","") & ".dat"
@@ -376,7 +367,6 @@ While 1
 		Case $copyBtn
 			$source = GUICtrlRead($fromList)
 			$target = GUICtrlRead($toList)
-			;DebugPrint($source & " -> " & $target)
 			If $source==$target Then ContinueCase
 
 			$solution = ""
@@ -386,7 +376,6 @@ While 1
 				$score = ""
 				If StringInStr($source,"#") Then
 					$fromSlot = Number(StringMid($source,StringInStr($source,"#")+1))
-					;DebugPrint("from Slot: " & $fromSlot)
 					$score = "_" & $saveScores[$fromSlot-1]
 					$score = StringReplace($score,"/","-")
 				EndIf
@@ -400,27 +389,23 @@ While 1
 				Else
 					$solution = FileReadLine($saveHdl)
 					FileClose($saveHdl)
-					;DebugPrint($solution)
 				EndIf
 			EndIf
 
 			If $target=="Harddrive" Then
 				$filename = StringReplace(_NowCalcDate(),"/","") & $score
 				$saveHD = InputBox("Save solution","File name to save to." & @CRLF & "(A prefix containing the level name will autmoatically be added.)",$filename)
-				$filename = "\" & $prefix & "_" & $saveHD & ".sav"
-				;DebugPrint($lastidx & ", " & $savedLevels[$listIdx][0] & "/" & $savedLevels[$listIdx][1] & ": " & $solution)
-				$saveHdl = FileOpen(@WorkingDir & $filename,2)
-				FileWriteLine($saveHdl,$solution)
-				FileClose($saveHdl)
+				If $saveHD<>"" Then
+					$filename = "\" & $prefix & "_" & $saveHD & ".sav"
+					;DebugPrint($lastidx & ", " & $savedLevels[$listIdx][0] & "/" & $savedLevels[$listIdx][1] & ": " & $solution)
+					$saveHdl = FileOpen(@WorkingDir & $filename,2)
+					FileWriteLine($saveHdl,$solution)
+					FileClose($saveHdl)
+				EndIf
 			Else
 				$toSlot = Number(StringMid($target,StringInStr($target,"#")+1))
 				$lineStart = "Solution." & $level & "." & String($toSlot-1)
 				$startLen = StringLen($lineStart)
-				$overwrite = False
-				If $savedLevels[$listIdx][7+$toSlot]<>"" Then
-					$overwrite = True
-					;DebugPrint("overwrite " & $lineStart)
-				EndIf
 				FileMove($savePath & "\save.dat",$savePath & "\save.tmp",1)
 				$saveRead = FileOpen($savePath & "\save.tmp")
 				$saveWrite = FileOpen($savePath & "\save.dat",2)
@@ -429,16 +414,12 @@ While 1
 					$line = FileReadLine($saveRead)
 					If @error Then ExitLoop
 					If Not $done Then
-						If $overwrite Then
-							If StringLeft($line,$startLen)==$lineStart Then
-								$line = $lineStart & " = " & $solution
-								$done = True
-							EndIf
-						Else
-							If StringLeft($line,$startLen)>$lineStart Then
-								FileWriteLine($saveWrite,$lineStart & " = " & $solution)
-								$done = True
-							EndIf
+						If StringLeft($line,$startLen)==$lineStart Then
+							$line = $lineStart & " = " & $solution
+							$done = True
+						ElseIf StringLeft($line,$startLen)>$lineStart Then
+							FileWriteLine($saveWrite,$lineStart & " = " & $solution)
+							$done = True
 						EndIf
 					EndIf
 					FileWriteLine($saveWrite,$line)
