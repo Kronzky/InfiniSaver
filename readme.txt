@@ -2,7 +2,7 @@
 
   Game Save Manager for Infinifactory
   
-  V1.1.0 / 2015-03-06
+  V1.2.0 / 2015-03-06
 
   © 2015 - Kronzky (kronzky@gmail.com / www.kronzky.info/other/infinisaver)
 
