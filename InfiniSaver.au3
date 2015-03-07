@@ -14,26 +14,39 @@ $saveRoot = @UserProfileDir & "\My Documents\My Games\Infinifactory\"
 $savePath = $saveRoot
 
 $iniFile = @WorkingDir & "\InfiniSaver.ini"
+$customPath = ""
+$campaign = 0
+$campaignInfo = False
+
 If FileExists($iniFile) Then
-	$savePath = IniRead($iniFile,"general","path",$savePath)
-	$saveRoot = StringLeft($savePath,StringInStr($savePath,"\",0,-1)-1)
-	DebugPrint($saveRoot)
-Else
-	If FileExists($saveRoot) Then
-		$folders = _FileListToArray($saveRoot)
-		$newestFolder = ""
-		$newestDate = ""
-		For $i=1 To $folders[0]
-			$folder = $folders[$i]
-			$date = FileGetTime($saveRoot & $folder & "\save.dat",0,1)
-			If $date>$newestDate Then
-				$newestDate = $date
-				$newestFolder = $folder
-			EndIf
-			;DebugPrint($saveRoot & $folder & ": " & $date)
-		Next
-		$savePath = $saveRoot & $newestFolder
+	$customPath = IniRead($iniFile,"general","path","")
+	If $customPath<>"" Then
+		DebugPrint($customPath)
+		$savePath = $customPath
+		$saveRoot = StringLeft($savePath,StringInStr($savePath,"\",0,-1)-1)
 	EndIf
+
+	$campaign = IniReadSection($iniFile,"campaign")
+	If @error==0 Then $campaignInfo = True
+	;_ArrayDisplay($campaign)
+Else
+
+EndIf
+
+If FileExists($saveRoot) And $customPath=="" Then
+	$folders = _FileListToArray($saveRoot)
+	$newestFolder = ""
+	$newestDate = ""
+	For $i=1 To $folders[0]
+		$folder = $folders[$i]
+		$date = FileGetTime($saveRoot & $folder & "\save.dat",0,1)
+		If $date>$newestDate Then
+			$newestDate = $date
+			$newestFolder = $folder
+		EndIf
+		;DebugPrint($saveRoot & $folder & ": " & $date)
+	Next
+	$savePath = $saveRoot & $newestFolder
 EndIf
 
 
@@ -69,7 +82,6 @@ Func GetLevels($path,$list)
 	$level = ""
 	$title = ""
 	$lastlevel = ""
-	$item = 0
 	$save1 = "-"
 	$save2 = "-"
 	$save3 = "-"
@@ -88,7 +100,6 @@ Func GetLevels($path,$list)
 			$idxoff = 2
 			If $type = "Footprint" Then $idxoff = 5
 			$score = $result[1]
-
 
 			If $level<>$lastlevel Then
 				ReDim $savedLevels[UBound($savedLevels,1)+1][11]
@@ -112,7 +123,21 @@ Func GetLevels($path,$list)
 				$solution = $info[2]
 				If $solution<>"" Then
 					$title = "Campaign"
-					If $start=="w" Then $title = GetTitle($path,$level)
+					If $start=="w" Then
+						$title = GetTitle($path,$level)
+					Else
+						If $campaignInfo Then
+							$worldId = StringLeft($level,1)
+							$worldIdx = _ArraySearch($campaign, $worldId & "-0")
+							If $worldIdx<>-1 Then
+								$worldName = $campaign[$worldIdx][1]
+								$levelIdx = _ArraySearch($campaign,$level)
+								If $levelIdx<>-1 Then
+									$title = $worldName & ": " & $campaign[$levelIdx][1]
+								EndIf
+							EndIf
+						EndIf
+					EndIf
 
 					If $title<>"" Then
 						If $level<>$lastlevel Then
@@ -188,16 +213,13 @@ Func GetLevels($path,$list)
 
 EndFunc
 
-Func GetSaves($path)
-	$saveHdl = FileOpen($path & "\save.dat")
-EndFunc
 
 ;==================================================================
 
 $guiWidth = 600
 $guiHeight = 590
 
-GUICreate("Infinifactory Save File Editor",$guiWidth, $guiHeight)
+GUICreate("Infinifactory Game Save Manager",$guiWidth, $guiHeight)
 
 GUICtrlCreateLabel ("Save File Folder:",10,20,100)
 $fromFile = GUICtrlCreateInput($savePath, 95, 15, 400, 20)
@@ -252,7 +274,7 @@ While 1
 		$saveScores[0] = _GUICtrlListView_GetItemText($SavList,$lastidx,3)
 		$saveScores[1] = _GUICtrlListView_GetItemText($SavList,$lastidx,4)
 		$saveScores[2] = _GUICtrlListView_GetItemText($SavList,$lastidx,5)
-		DebugPrint($lastidx & ", " & $level & "," & $title & "," & $saveScores[0] & "," & $saveScores[1] & "," & $saveScores[2] & "; " & $savedLevels[$listIdx][0])
+		;DebugPrint($lastidx & ", " & $level & "," & $title & "," & $saveScores[0] & "," & $saveScores[1] & "," & $saveScores[2] & "; " & $savedLevels[$listIdx][0])
 
 		GUICtrlSetData($fromList,"|Save slot #1","Save slot #1")
 		If $saveScores[1]<>"-" Then
@@ -336,9 +358,14 @@ While 1
 				$line = FileReadLine($saveRead1)
 				If @error Then ExitLoop
 				If StringLeft($line,7)=="Hotbar." Then
-					$line = FileReadLine($saveRead2)
+					While 1
+						$line2 = FileReadLine($saveRead2)
+						If @error Then ExitLoop
+						FileWriteLine($saveWrite,$line2)
+					WEnd
+				Else
+					FileWriteLine($saveWrite,$line)
 				EndIf
-				FileWriteLine($saveWrite,$line)
 			WEnd
 			FileClose($saveWrite)
 			FileClose($saveRead2)
@@ -351,7 +378,6 @@ While 1
 			$target = GUICtrlRead($toList)
 			;DebugPrint($source & " -> " & $target)
 			If $source==$target Then ContinueCase
-
 
 			$solution = ""
 			$score = ""
@@ -374,16 +400,15 @@ While 1
 				Else
 					$solution = FileReadLine($saveHdl)
 					FileClose($saveHdl)
-					DebugPrint($solution)
+					;DebugPrint($solution)
 				EndIf
 			EndIf
-
 
 			If $target=="Harddrive" Then
 				$filename = StringReplace(_NowCalcDate(),"/","") & $score
 				$saveHD = InputBox("Save solution","File name to save to." & @CRLF & "(A prefix containing the level name will autmoatically be added.)",$filename)
 				$filename = "\" & $prefix & "_" & $saveHD & ".sav"
-				DebugPrint($lastidx & ", " & $savedLevels[$listIdx][0] & "/" & $savedLevels[$listIdx][1] & ": " & $solution)
+				;DebugPrint($lastidx & ", " & $savedLevels[$listIdx][0] & "/" & $savedLevels[$listIdx][1] & ": " & $solution)
 				$saveHdl = FileOpen(@WorkingDir & $filename,2)
 				FileWriteLine($saveHdl,$solution)
 				FileClose($saveHdl)
@@ -394,7 +419,7 @@ While 1
 				$overwrite = False
 				If $savedLevels[$listIdx][7+$toSlot]<>"" Then
 					$overwrite = True
-					DebugPrint("overwrite " & $lineStart)
+					;DebugPrint("overwrite " & $lineStart)
 				EndIf
 				FileMove($savePath & "\save.dat",$savePath & "\save.tmp",1)
 				$saveRead = FileOpen($savePath & "\save.tmp")
