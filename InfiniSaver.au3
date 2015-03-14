@@ -9,14 +9,16 @@
 #include <GuiListView.au3>
 #include <WindowsConstants.au3>
 
-
 $saveRoot = @UserProfileDir & "\My Documents\My Games\Infinifactory\"
 $savePath = $saveRoot
 
 $iniFile = @WorkingDir & "\InfiniSaver.ini"
 $customPath = ""
+
+Global $savedLevels[1][11] ; [levelID,title, slot1:cycles,slot2:cycles,slot3:cycles, slot1:footprint,slot2:footprint,slot3:footprint, slot1:solution,slot2:solution,slot3:solution]
 $campaign = 0
 $campaignInfo = False
+Dim $workshopSolutions[1]
 
 If FileExists($iniFile) Then
 	$customPath = IniRead($iniFile,"general","path","")
@@ -53,119 +55,53 @@ Func DebugPrint($msg)
     DllCall("kernel32.dll", "none", "OutputDebugString", "str", "[K] " & $msg)
 EndFunc
 
-Func GetTitle ($path,$level)
-	$lvlHdl = FileOpen($path & "\workshop\" & $level)
-	$title = ""
-	While 1
-		$line = FileReadLine($lvlHdl)
-		If @error Then ExitLoop
-		If StringLeft($line,5)=="Title" Then
-			$title = StringMid($line,8)
+Func GetLevelIdx($level)
+	$levelIdx = -1
+	For $i=0 to UBound($savedLevels,1)-1
+		If $savedLevels[$i][0]==$level Then
+			$levelIdx = $i
 			ExitLoop
 		EndIf
-	WEnd
-	FileClose($lvlHdl)
-	Return $title
+	Next
+	;DebugPrint($level & ", " & $levelIdx)
+	Return $levelIdx
 EndFunc
 
-Func GetLevels($path,$list)
-	_GUICtrlListView_DeleteAllItems($list)
-	Global $savedLevels[1][11] ; [levelID,title, slot1:cycles,slot2:cycles,slot3:cycles, slot1:footprint,slot2:footprint,slot3:footprint, slot1:solution,slot2:solution,slot3:solution]
-
-	$savHdl = FileOpen($path & "\save.dat")
-
-	$level = ""
+Func GetTitle ($path,$level,$isCampaign)
 	$title = ""
-	$lastlevel = ""
-	$save1 = "-"
-	$save2 = "-"
-	$save3 = "-"
-	$idx = -1
-
-	While 1
-		$line = FileReadLine($savHdl)
-		If @error Then ExitLoop
-
-		If StringLeft($line,4)=="Last" Then
-			$info = StringSplit(StringStripWS($line,8),".",2)
-			$level = $info[1]
-			$slot = Number($info[2])
-			$result = StringSplit($info[3],"=",2)
-			$type = $result[0]
-			$idxoff = 2
-			If $type = "Footprint" Then $idxoff = 5
-			$score = $result[1]
-
-			If $level<>$lastlevel Then
-				ReDim $savedLevels[UBound($savedLevels,1)+1][11]
-				$savedLevels[UBound($savedLevels,1)-1][0] = $level
-				$savedLevels[UBound($savedLevels,1)-1][$idxoff+$slot] = $score
-				;DebugPrint("new: " & $level & ", " & $slot & ", " & $type & ", " & $score  & ", " & $idxoff+$slot)
-			Else
-				$savedLevels[UBound($savedLevels,1)-1][$idxoff+$slot] = $score
-				;DebugPrint("old: " & $level & ", " & $slot & ", " & $type & ", " & $score  & ", " & $idxoff+$slot)
-			EndIf
-			$lastlevel = $level
-		EndIf
-
-		If StringLeft($line,8)=="Solution" Then
-			$start = StringMid($line,10,1)
-			If $start=="w" Or Number($start)>0 Then
-				$info = StringSplit($line," ",2)
-				$levelinfo = StringSplit($info[0],".",2)
-				$level = $levelinfo[1]
-				$slot = $levelinfo[2]
-				$solution = $info[2]
-				If $solution<>"" Then
-					$title = "Campaign"
-					If $start=="w" Then
-						$title = GetTitle($path,$level)
-					Else
-						If $campaignInfo Then
-							$worldId = StringLeft($level,1)
-							$worldIdx = _ArraySearch($campaign, $worldId & "-0")
-							If $worldIdx<>-1 Then
-								$worldName = $campaign[$worldIdx][1]
-								$levelIdx = _ArraySearch($campaign,$level)
-								If $levelIdx<>-1 Then
-									$title = $worldName & ": " & $campaign[$levelIdx][1]
-								EndIf
-							EndIf
-						EndIf
-					EndIf
-
-					If $title<>"" Then
-						If $level<>$lastlevel Then
-							$idx = -1
-							For $i=0 To UBound($savedLevels,1)-1
-								$levelId = $savedLevels[$i][0]
-								If $levelId==$level Then
-									$idx = $i
-									$savedLevels[$i][1] = $title
-									$savedLevels[$i][8+$slot] = $solution
-								EndIf
-							Next
-							If $idx==-1 Then
-								$idx = UBound($savedLevels,1)
-								$savedLevels[$idx-1][0] = $level
-								$savedLevels[$idx-1][1] = $title
-								$savedLevels[$idx-1][8+$slot] = $solution
-								ReDim $savedLevels[$idx+1][11]
-							EndIf
-						EndIf
-					EndIf
-					$lastlevel = $levelId
+	If $isCampaign Then
+		If $campaignInfo Then
+			$worldId = StringLeft($level,1)
+			$worldIdx = _ArraySearch($campaign, $worldId & "-0")
+			If $worldIdx<>-1 Then
+				$worldName = $campaign[$worldIdx][1]
+				$levelIdx = _ArraySearch($campaign,$level,0,0,2)
+				If $levelIdx<>-1 Then
+					$title = $worldName & ": " & $campaign[$levelIdx][1]
 				EndIf
 			EndIf
 		EndIf
-	WEnd
-	FileClose($savHdl)
+	Else
+		$lvlHdl = FileOpen($path & "\workshop\" & $level)
+		$title = ""
+		While 1
+			$line = FileReadLine($lvlHdl)
+			If @error Then ExitLoop
+			If StringLeft($line,5)=="Title" Then
+				$title = StringMid($line,8)
+				ExitLoop
+			EndIf
+		WEnd
+		FileClose($lvlHdl)
+	EndIf
+	Return $title
+EndFunc
 
-
-	For $i=1 To UBound($savedLevels,1)-2
-		If $savedLevels[$i][1]<>"" Then
-			$level = $savedLevels[$i][0]
+Func ShowScore($level,$list)
+	For $i=0 To UBound($savedLevels,1)-2
+		If $savedLevels[$i][0]==$level Then
 			$title = $savedLevels[$i][1]
+			;DebugPrint($level & ", " & $title)
 			$save1 = "-"
 			If $savedLevels[$i][2]<>"" Then
 				$save1 = $savedLevels[$i][2] & "/" & $savedLevels[$i][5]
@@ -197,6 +133,95 @@ Func GetLevels($path,$list)
 			_GUICtrlListView_AddSubItem($list, $idx, $save2,4)
 			_GUICtrlListView_AddSubItem($list, $idx, $save3,5)
 		EndIf
+	Next
+EndFunc
+
+Func GetLevels($path,$list)
+	_GUICtrlListView_DeleteAllItems($list)
+
+	$savHdl = FileOpen($path & "\save.dat")
+
+	$level = ""
+	$title = ""
+	$save1 = "-"
+	$save2 = "-"
+	$save3 = "-"
+	$idx = -1
+
+	While 1
+		$line = FileReadLine($savHdl)
+		If @error Then ExitLoop
+
+		If StringLeft($line,4)=="Last" Then
+			$info = StringSplit(StringStripWS($line,8),".",2)
+			$level = $info[1]
+			$slot = Number($info[2])
+			$result = StringSplit($info[3],"=",2)
+			$type = $result[0]
+			$idxoff = 2
+			If $type = "Footprint" Then $idxoff = 5
+			$score = $result[1]
+
+			$levelIdx = GetLevelIdx($level)
+			If $levelIdx==-1 Then
+				$savedLevels[UBound($savedLevels,1)-1][0] = $level
+				$savedLevels[UBound($savedLevels,1)-1][$idxoff+$slot] = $score
+				ReDim $savedLevels[UBound($savedLevels,1)+1][11]
+				;DebugPrint("new: " & $level & ", " & $slot & ", " & $type & ", " & $score  & ", " & $idxoff+$slot)
+			Else
+				$savedLevels[$levelIdx][$idxoff+$slot] = $score
+				;DebugPrint("old: " & $level & ", " & $slot & ", " & $type & ", " & $score  & ", " & $idxoff+$slot)
+			EndIf
+		EndIf
+
+		If StringLeft($line,8)=="Solution" Then
+			$start = StringMid($line,10,1)
+			If $start=="w" Or Number($start)>0 Then
+				$info = StringSplit($line," ",2)
+				$levelinfo = StringSplit($info[0],".",2)
+				$level = $levelinfo[1]
+				$slot = $levelinfo[2]
+				$solution = $info[2]
+				If $solution<>"" Then
+					$title = GetTitle($path,$level,$start<>"w")
+					;DebugPrint($level & ", " & $title)
+
+					If $title<>"" Then
+						If $start=="w" Then
+							If _ArraySearch($workshopSolutions,$level)==-1 Then
+								$workshopSolutions[UBound($workshopSolutions)-1] = $level
+								ReDim $workshopSolutions[UBound($workshopSolutions)+1]
+							EndIf
+						EndIf
+
+						$levelIdx = GetLevelIdx($level)
+						If $levelIdx==-1 Then
+							$idx = UBound($savedLevels,1)
+							$savedLevels[$idx-1][0] = $level
+							$savedLevels[$idx-1][1] = $title
+							$savedLevels[$idx-1][8+$slot] = $solution
+							ReDim $savedLevels[$idx+1][11]
+						Else
+							$savedLevels[$levelIdx][1] = $title
+							$savedLevels[$levelIdx][8+$slot] = $solution
+						EndIf
+					EndIf
+				EndIf
+			EndIf
+		EndIf
+	WEnd
+	FileClose($savHdl)
+
+	; show the campaign results
+	For $i=1 To UBound($campaign,1)-1
+		$level = $campaign[$i][0]
+		$levelIdx = GetLevelIdx($level)
+		If $levelIdx<>-1 Then
+			ShowScore($level,$list)
+		EndIf
+	Next
+	For $i=1 To UBound($workshopSolutions,1)-2
+		ShowScore($workshopSolutions[$i],$list)
 	Next
 
 EndFunc
