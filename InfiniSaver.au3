@@ -7,6 +7,7 @@
 #Include <Array.au3>
 #include <GUIConstantsEx.au3>
 #include <GuiListView.au3>
+#include <GuiStatusBar.au3>
 #include <WindowsConstants.au3>
 
 $saveRoot = @UserProfileDir & "\My Documents\My Games\Infinifactory\"
@@ -14,18 +15,20 @@ $savePath = $saveRoot
 
 $iniFile = @WorkingDir & "\InfiniSaver.ini"
 $customPath = ""
-
-Global $savedLevels[1][11] ; [levelID,title, slot1:cycles,slot2:cycles,slot3:cycles, slot1:footprint,slot2:footprint,slot3:footprint, slot1:solution,slot2:solution,slot3:solution]
+							; 0       1		 2			  3			   4			 5				 6				  7				  8			     9				10				11			 12			  13
+Global $savedLevels[1][14] ; [levelID,title, slot1:cycles,slot2:cycles,slot3:cycles, slot1:footprint,slot2:footprint,slot3:footprint, slot1:solution,slot2:solution,slot3:solution, slot1:blocks,slot2:blocks,slot3:blocks]
 $campaign = 0
 $campaignInfo = False
 Dim $workshopSolutions[1]
 
+Global $efficiency = "b/(c*.35+f)"
 If FileExists($iniFile) Then
 	$customPath = IniRead($iniFile,"general","path","")
 	If $customPath<>"" Then
 		$savePath = $customPath
 		$saveRoot = StringLeft($savePath,StringInStr($savePath,"\",0,-1)-1)
 	EndIf
+	$efficiency = IniRead($iniFile,"general","efficiency",$efficiency)
 
 	$campaign = IniReadSection($iniFile,"campaign")
 	If @error==0 Then $campaignInfo = True
@@ -101,39 +104,45 @@ Func ShowScore($level,$list)
 	For $i=0 To UBound($savedLevels,1)-2
 		If $savedLevels[$i][0]==$level Then
 			$title = $savedLevels[$i][1]
+			If $title=="" Then ExitLoop
 			;DebugPrint($level & ", " & $title)
-			$save1 = "-"
-			If $savedLevels[$i][2]<>"" Then
-				$save1 = $savedLevels[$i][2] & "/" & $savedLevels[$i][5]
-			Else
-				If $savedLevels[$i][8]<>"" Then
-					$save1 = "WiP"
-				EndIf
-			EndIf
-			$save2 = "-"
-			If $savedLevels[$i][3]<>"" Then
-				$save2 = $savedLevels[$i][3] & "/" & $savedLevels[$i][6]
-			Else
-				If $savedLevels[$i][9]<>"" Then
-					$save2 = "WiP"
-				EndIf
-			EndIf
-			$save3 = "-"
-			If $savedLevels[$i][4]<>"" Then
-				$save3 = $savedLevels[$i][4] & "/" & $savedLevels[$i][7]
-			Else
-				If $savedLevels[$i][10]<>"" Then
-					$save3 = "WiP"
-				EndIf
-			EndIf
+
 			$idx = _GUICtrlListView_AddItem($list,$i,0)
 			_GUICtrlListView_AddSubItem($list, $idx, $level,1)
 			_GUICtrlListView_AddSubItem($list, $idx, $title,2)
-			_GUICtrlListView_AddSubItem($list, $idx, $save1,3)
-			_GUICtrlListView_AddSubItem($list, $idx, $save2,4)
-			_GUICtrlListView_AddSubItem($list, $idx, $save3,5)
+			$info = $level & ", " & $title
+			For $savidx=0 To 2
+				;DebugPrint('  ' & $savidx & ": " & $savedLevels[$i][$savidx+8])
+				$save = "-"
+				If $savedLevels[$i][$savidx+2]<>"" Then
+					$cycles = $savedLevels[$i][$savidx+2]
+					$foot = $savedLevels[$i][$savidx+5]
+					$blocks = $savedLevels[$i][$savidx+11]
+					$save = $cycles & "/" & $foot
+					$effVal = CalcEfficiency($cycles,$foot,$blocks)
+					If $info<>"" Then
+						DebugPrint($info)
+						$info = ""
+					EndIf
+					DebugPrint('  ' & $cycles & "/" & $foot & "/" & $blocks & "=" & Round($effVal,2))
+				Else
+					If $savedLevels[$i][$savidx+8]<>"" Then
+						$save = "WiP"
+					EndIf
+				EndIf
+				_GUICtrlListView_AddSubItem($list, $idx, $save,$savidx+3)
+			Next
 		EndIf
 	Next
+EndFunc
+
+Func GetBlockCount($cntstr)
+	$hi2 = (Asc(StringMid($cntstr,3,1))-65) * 256
+	$hi = (Asc(StringLeft($cntstr,1))-65) * 16
+	$lo = StringInStr("AEIMQUYcgkosw048",StringMid($cntstr,2,1))-1
+	$blocks = $hi2 + $hi + $lo
+	;DebugPrint($cntstr & ", " & $hi & "+" & $lo & "+" & $hi2 & ": " & $blocks)
+	Return $blocks
 EndFunc
 
 Func GetLevels($path,$list)
@@ -166,7 +175,7 @@ Func GetLevels($path,$list)
 			If $levelIdx==-1 Then
 				$savedLevels[UBound($savedLevels,1)-1][0] = $level
 				$savedLevels[UBound($savedLevels,1)-1][$idxoff+$slot] = $score
-				ReDim $savedLevels[UBound($savedLevels,1)+1][11]
+				ReDim $savedLevels[UBound($savedLevels,1)+1][14]
 				;DebugPrint("new: " & $level & ", " & $slot & ", " & $type & ", " & $score  & ", " & $idxoff+$slot)
 			Else
 				$savedLevels[$levelIdx][$idxoff+$slot] = $score
@@ -183,6 +192,8 @@ Func GetLevels($path,$list)
 				$slot = $levelinfo[2]
 				$solution = $info[2]
 				If $solution<>"" Then
+					$blocks = GetBlockCount(StringMid($solution,6,3))
+					;DebugPrint($level & "." & $slot & ": " & $blocks)
 					$title = GetTitle($path,$level,$start<>"w")
 					;DebugPrint($level & ", " & $title)
 
@@ -200,10 +211,12 @@ Func GetLevels($path,$list)
 							$savedLevels[$idx-1][0] = $level
 							$savedLevels[$idx-1][1] = $title
 							$savedLevels[$idx-1][8+$slot] = $solution
-							ReDim $savedLevels[$idx+1][11]
+							$savedLevels[$idx-1][11+$slot] = $blocks
+							ReDim $savedLevels[$idx+1][14]
 						Else
 							$savedLevels[$levelIdx][1] = $title
 							$savedLevels[$levelIdx][8+$slot] = $solution
+							$savedLevels[$levelIdx][11+$slot] = $blocks
 						EndIf
 					EndIf
 				EndIf
@@ -223,7 +236,46 @@ Func GetLevels($path,$list)
 	For $i=1 To UBound($workshopSolutions,1)-2
 		ShowScore($workshopSolutions[$i],$list)
 	Next
+EndFunc
 
+Func CalcEfficiency($c,$f,$b)
+	$eff = StringReplace($efficiency,"b",$b)
+	$eff = StringReplace($eff,"c",$c)
+	$eff = StringReplace($eff,"f",$f)
+	$effVal = Execute($eff)
+	Return Round($effVal,2)
+EndFunc
+
+Global $iItem_old = -1, $iSubItem_old = -1
+Func UpdToolTip($mylist)
+    Local $aHit = _GUICtrlListView_SubItemHitTest($mylist)
+
+    If $aHit[0] < 0 Or $aHit[1] < 0 Or $aHit[1]<3 Then
+        If $iItem_old = -1 Or $iSubItem_old = -1 Then Return
+        $iItem_old = -1
+        $iSubItem_old = -1
+        Return ToolTip('')
+    EndIf
+
+    If $aHit[0] = $iItem_old And $aHit[1] = $iSubItem_old Then Return
+
+	$listIdx = _GUICtrlListView_GetItemText($mylist,$aHit[0],0)
+
+    $info = "Row " & $aHit[0] & " Col " & $aHit[1] & ", "
+    $info = ""
+	$cycles = $savedLevels[$listIdx][$aHit[1]-1]
+	$foot = $savedLevels[$listIdx][$aHit[1]+2]
+	$blocks = $savedLevels[$listIdx][$aHit[1]+8]
+	If $blocks<>0 Then
+		$info = "Blocks: " & $blocks
+		If $cycles*$foot<>0 Then
+			$effVal = CalcEfficiency($cycles,$foot,$blocks)
+			$info = "Cycles: " & $cycles & ", Footprint: " & $foot & ", Blocks: " & $blocks & @CRLF & "Efficiency: " & Round($effVal,2)
+		EndIf
+	EndIf
+	ToolTip($info)
+    $iItem_old = $aHit[0]
+    $iSubItem_old  = $aHit[1]
 EndFunc
 
 
@@ -232,7 +284,7 @@ EndFunc
 $guiWidth = 600
 $guiHeight = 590
 
-GUICreate("Infinifactory Game Save Manager",$guiWidth, $guiHeight)
+$hGUI = GUICreate("Infinifactory Game Save Manager",$guiWidth, $guiHeight)
 
 GUICtrlCreateLabel ("Save File Folder:",10,20,100)
 $fromFile = GUICtrlCreateInput($savePath, 95, 15, 400, 20)
@@ -250,11 +302,12 @@ GUICtrlCreateLabel ("Available Saves:",10,150,100)
 $SavList = GUICtrlCreateListView("",10, 170, 580, 350)
 _GUICtrlListView_AddColumn($SavList,"idx",0)
 _GUICtrlListView_AddColumn($SavList,"Level ID",80)
-_GUICtrlListView_AddColumn($SavList,"Title",300)
+_GUICtrlListView_AddColumn($SavList,"Title",298)
 _GUICtrlListView_AddColumn($SavList,"Save1",60)
 _GUICtrlListView_AddColumn($SavList,"Save2",60)
 _GUICtrlListView_AddColumn($SavList,"Save3",60)
 GetLevels($savePath,$SavList)
+$listHdl = GUICtrlGetHandle(-1)
 
 
 GUICtrlCreateLabel ("Copy from",20,545,100)
@@ -266,10 +319,10 @@ GUICtrlSetData($toList,"Save slot #3")
 GUICtrlSetData($toList,"Harddrive")
 
 $copyBtn = GUICtrlCreateButton("Copy", 510, 541, 70, 20)
+
 GUICtrlSetState($copyBtn,$GUI_DISABLE)
 
 GUISetState(@SW_SHOW)
-
 
 
 Dim $saveScores[3]
@@ -318,6 +371,9 @@ While 1
 	Switch $msg
 		Case $GUI_EVENT_CLOSE
 		  ExitLoop
+
+		Case $GUI_EVENT_MOUSEMOVE
+			UpdToolTip($listHdl)
 
 		Case $folderBtn
 			$savePath = FileSelectFolder("Select save folder",$saveRoot,-1,$saveRoot)
