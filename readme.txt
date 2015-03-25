@@ -2,14 +2,16 @@
 
   Game Save Manager for Infinifactory
   
-  V1.2.0 / 2015-03-06
+  V1.4.0 / 2015-03-25
 
   © 2015 - Kronzky (kronzky@gmail.com / www.kronzky.info/other/infinisaver)
+  
+  GitHub repo: https://github.com/Kronzky/InfiniSaver
 
  **********************************************************************************************
 
   INSTALLATION:
-  	Create a new folder, and copy the InfiniSaver.exe into it.
+  	Create a new folder, and copy the InfiniSaver.exe and .ini into it.
 
 
   USAGE:
@@ -21,7 +23,7 @@
 	All available solutions will be listed, with their internal name, their title,
 	and the current scores (cycles/footprint). If a solution has not been completed
 	yet, it will show "WiP" in the save slot column.
-
+	
   * Copy between slots
 	To copy a save from one slot to another, select the appropriate level, and choose
 	the 'from' and 'to' slots from the drop-down menus at the bottom.
@@ -42,7 +44,17 @@
 	is "save_yyyymmdd-hhmm.dat".
 	To load a backup from the harddrive, click 'Restore Backup' and select the desired
 	file.
+
+  * Save/restore key shortcuts
+	Key shortcuts can be saved and restored independently from the main or level saves 
+	via the 'Backup/Restore Key Shortcuts' buttons.
 	
+  *	Block count and efficiency calculation
+    When hovering over a save slot, a tooltip will show the cycle and footprint value,
+	as well as the number of blocks used, and an efficiency calculation.
+	The formula for this calculation is stored in the InfiniSaver.ini file, 
+	and can be modified by the user.
+
 	
 	All save files (for the complete game or individual levels) will be stored in the
 	same folder that the InfiniSaver program in installed in.
